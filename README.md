@@ -228,3 +228,10 @@ If you are just going to interact with the bash shell (say to run production cod
 # run from anywhere as yourself (as the non-root user)
 docker run -it --rm --gpus=all --user 1000:1000 -v /home/carolyn/ramp-staging:/tf/ramp-staging -v /home/carolyn/ramp-data:/tf/ramp-data -p 8888:8888 rampbase
 ```
+
+
+____
+
+LICENSING:
+
+This software has been licensed under the [Apache 2.0 software license](https://www.apache.org/licenses/LICENSE-2.0.txt).
