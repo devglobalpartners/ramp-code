@@ -76,7 +76,7 @@ cd ..
 pip install -e .
 ```
 
-to install the ramp modules. This command will finish quickly.
+to install the ramp modules. *Be sure to include the period at the end of the pip install command!* That period tells the pip command to look for the information it needs in the current working directory. The *pip install* command will finish quickly.
 
 To test whether your installation worked, start a python session as follows:
 
@@ -85,6 +85,12 @@ python
 >> import ramp
 ```
 
-If *import ramp* runs successfully, you have installed the ramp modules.
+If *import ramp* runs successfully, you have installed the ramp modules. Note that *import ramp* has run successfully if you see the following output and there are no error messages:
+
+```
+python
+>> import ramp
+>>
+```
 
 #### 8. Run the Colab model training notebook: `train_ramp_model_on_colab.ipynb`.
