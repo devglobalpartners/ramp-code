@@ -17,7 +17,7 @@ services:
       - MPLCONFIGDIR=/tmp/matplotlib
       - TF_CPP_MIN_LOG_LEVEL=3
       - HOME=/home/kbhatt
-      - RAMP_GPU_MEMORY_MB=11520      # 75% of Tesla T4 15360 MiB
+      - RAMP_GPU_MEMORY_MB=13312      # 75% of Tesla T4 15360 MiB
       - RAMP_TILE_WORKERS=21          # 75% of 28 CPU cores
     volumes:
       # Training data on the fast 1.2TB /mnt drive
