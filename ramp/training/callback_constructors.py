@@ -11,8 +11,8 @@ log = logging.getLogger(__name__)
 log.addHandler(logging.NullHandler())
 import os, sys
 import tensorflow as tf
-import keras
-import keras.backend as K
+from tensorflow import keras
+from tensorflow.keras import backend as K
 import datetime
 from pathlib import Path
 import numpy as np

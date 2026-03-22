@@ -86,9 +86,6 @@ else:
 extra_reqs = {
     'test': ['mock', 'pytest', 'pytest-cov', 'codecov']}
 
-# workaround until new shapely release is out
-os.system('pip install  git+git://github.com/toblerity/shapely@master')
-
 
 project_name = 'solaris'
 setup(name='solaris',
@@ -109,7 +106,6 @@ setup(name='solaris',
       include_package_data=True,
       install_requires=inst_reqs,
       extras_require=extra_reqs,
-      dependency_links=['https://github.com/toblerity/shapely/tarball/master#egg=shapely-1.7.1dev'],
       entry_points={'console_scripts': [
           'geotransform_footprints = solaris.bin.geotransform_footprints:main',
           'make_graphs = solaris.bin.make_graphs:main',

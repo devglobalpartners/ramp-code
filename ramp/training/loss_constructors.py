@@ -11,7 +11,7 @@ log = logging.getLogger(__name__)
 log.addHandler(logging.NullHandler())
 
 import tensorflow as tf
-import keras.backend as K
+from tensorflow.keras import backend as K
 from tensorflow.keras.losses import CategoricalCrossentropy, categorical_crossentropy
 
 import numpy as np

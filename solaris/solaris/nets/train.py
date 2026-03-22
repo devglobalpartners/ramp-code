@@ -57,7 +57,7 @@ class Trainer(object):
             else:
                 self.gpu_count = 0
         elif self.framework == 'keras':
-            self.gpu_available = tf.test.is_gpu_available()
+            self.gpu_available = len(tf.config.list_physical_devices('GPU')) > 0
 
         self.is_initialized = False
         self.stop = False

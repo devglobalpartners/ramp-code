@@ -7,12 +7,10 @@
 #################################################################
 
 import tensorflow as tf
-from tensorflow.keras.layers.experimental import preprocessing 
 import os
 from osgeo import gdal, gdalnumeric as gdn
 import numpy as np
 import matplotlib.pyplot as plt
-from tensorflow.python.ops.gen_batch_ops import batch
 from ..utils.ramp_exceptions import GdalReadError
 import random
 
@@ -248,8 +246,8 @@ def training_batches_from_gtiff_dirs(
     mask_ds = tf.data.Dataset.list_files(mask_pat, seed=333)
 
     # get the number of training images and masks. Since they match, the numbers should be the same. 
-    n_images = tf.data.experimental.cardinality(image_ds)
-    n_masks = tf.data.experimental.cardinality(mask_ds)
+    n_images = tf.data.cardinality(image_ds)
+    n_masks = tf.data.cardinality(mask_ds)
     assert n_images==n_masks, f"Number of images: {n_images} | Number of masks: {n_masks}"
     
     # Define functions to use for loading gdal images in the data pipeline.
@@ -337,8 +335,8 @@ def test_batches_from_gtiff_dirs(
 
       # get the number of training images and masks. Since they match, the numbers should be the same.
       # todo: make the data generator end appropriately if the numbers don't match.
-      n_images = tf.data.experimental.cardinality(image_ds)
-      n_masks = tf.data.experimental.cardinality(mask_ds)
+      n_images = tf.data.cardinality(image_ds)
+      n_masks = tf.data.cardinality(mask_ds)
       assert n_images==n_masks, f"Num images: {n_images}, Num masks: {n_masks} "
 
       # Define functions to use for loading gdal images in the data pipeline.
@@ -396,8 +394,8 @@ def test_batches_from_gtiff_dirs_with_names(
 
       # get the number of training images and masks. Since they match, the numbers should be the same.
       # todo: make the data generator end appropriately if the numbers don't match.
-      n_images = tf.data.experimental.cardinality(image_ds)
-      n_masks = tf.data.experimental.cardinality(mask_ds)
+      n_images = tf.data.cardinality(image_ds)
+      n_masks = tf.data.cardinality(mask_ds)
       assert n_images==n_masks, f"Num images: {n_images}, Num masks: {n_masks} "
 
       # Define functions to use for loading gdal images in the data pipeline.

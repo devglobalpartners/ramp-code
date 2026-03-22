@@ -86,10 +86,10 @@ def main():
     # I added this code to prevent mysterious out of memory problems with the GPU.
     # see this webpage for explanation: 
     # https://stackoverflow.com/questions/43147983/could-not-create-cudnn-handle-cudnn-status-internal-error
-    physical_devices = tf.config.experimental.list_physical_devices('GPU')
-    assert len(physical_devices) > 0, "Not enough GPU hardware devices available"
-    config = tf.config.experimental.set_memory_growth(physical_devices[0], True)
-    config = tf.config.experimental.set_memory_growth(physical_devices[1], True)
+    physical_devices = tf.config.list_physical_devices('GPU')
+    assert len(physical_devices) > 0, "No GPU hardware devices available"
+    for device in physical_devices:
+        tf.config.set_memory_growth(device, True)
 
     #### add timestamp to configuration ####
     cfg["timestamp"] = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")

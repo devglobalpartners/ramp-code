@@ -1,0 +1,51 @@
+services:
+  able:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        USER_ID: 150857
+        GROUP_ID: 2766
+    image: able-base
+    container_name: able
+    user: "150857:2766"
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+      - RAMP_HOME=/tf
+      - MPLCONFIGDIR=/tmp/matplotlib
+      - TF_CPP_MIN_LOG_LEVEL=3
+      - HOME=/home/kbhatt
+      - RAMP_GPU_MEMORY_MB=11520      # 75% of Tesla T4 15360 MiB
+      - RAMP_TILE_WORKERS=21          # 75% of 28 CPU cores
+    volumes:
+      # Training data on the fast 1.2TB /mnt drive
+      - /mnt/able-data:/tf/ramp-data
+      # Mount scripts for easy access
+      - ./scripts:/tf/scripts
+      - ./shell-scripts:/tf/shell-scripts
+      # Mount experiment configs
+      - ./experiments:/tf/experiments
+      - ./data:/tf/data
+      # Mount notebooks for Jupyter
+      - ./notebooks:/tf/notebooks
+      # Mount ramp source for development (editable installs)
+      - ./ramp:/tf/ramp-code/ramp
+      - ./setup.py:/tf/ramp-code/setup.py
+      # Mount custom scripts
+      - ./reut-scripts:/tf/reut-scripts
+    working_dir: /tf
+    ports:
+      - "8888:8888"   # Jupyter
+      - "6006:6006"   # TensorBoard
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    shm_size: '8g'
+    stdin_open: true
+    tty: true

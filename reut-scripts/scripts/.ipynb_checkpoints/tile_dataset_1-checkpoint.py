@@ -1,0 +1,167 @@
+#################################################################
+#
+# created for ramp project, August 2022
+# Author: carolyn.johnston@dev.global
+# Modified for parallel tiling, Nov 2025
+#
+#################################################################
+
+import os, sys
+from pathlib import Path
+import rasterio as rio
+import numpy as np
+import argparse
+import tensorflow as tf
+import solaris as sol
+from tqdm import tqdm
+from concurrent.futures import ProcessPoolExecutor, as_completed
+
+import psutil
+from concurrent.futures import ProcessPoolExecutor, as_completed
+
+# adding logging
+import logging
+log = logging.getLogger(__name__)
+log.setLevel(logging.INFO)
+ch = logging.StreamHandler()
+ch.setLevel(logging.INFO)
+log.addHandler(ch)
+
+from ramp.utils.label_utils import create_tile_gdf
+
+# get rid of geopandas FutureWarning
+import warnings
+warnings.simplefilter(action='ignore', category=FutureWarning)
+
+def tile_single_image(img_file, labels_file, out_dir, file_prefix, nodata_thresh, dst_shape, tile_record_filename=None):
+    """Extracted tiling logic for one image, for parallel execution."""
+    tile_labels = labels_file is not None
+
+    # create output directories for chips
+    chip_dir = str(Path(out_dir)/"chips")
+    Path(chip_dir).mkdir(parents=True, exist_ok=True)
+
+    # create output directories for labels
+    if tile_labels:
+        label_dir = str(Path(out_dir)/"labels")
+        Path(label_dir).mkdir(parents=True, exist_ok=True)
+
+    raster_tiler = sol.tile.raster_tile.RasterTiler(
+        dest_dir = chip_dir,
+        dest_tile_size = dst_shape,
+        src_tile_size = dst_shape,
+        verbose=True,
+        alpha=None
+    )
+
+    log.info(f"Tiling image file: {img_file}")
+    raster_bound_crs = raster_tiler.tile(
+        img_file,
+        dest_fname_base = file_prefix,
+        nodata_threshold=nodata_thresh
+    )
+
+    if tile_labels:
+        log.info(f"Tiling vector file: {labels_file}")
+        vector_tiler = sol.tile.vector_tile.VectorTiler(
+            dest_dir = label_dir,
+            verbose=True
+        )
+        vector_tiler.tile(
+            labels_file,
+            tile_bounds = raster_tiler.tile_bounds,
+            tile_bounds_crs = raster_bound_crs,
+            dest_fname_base = file_prefix
+        )
+
+    if tile_record_filename is not None:
+        log.info(f"Creating tile record file: {tile_record_filename}")
+        gdf = create_tile_gdf(
+            raster_tiler = raster_tiler, 
+            tile_bounds_crs=raster_bound_crs
+        )
+        gdf.to_file(tile_record_filename, driver="GeoJSON")
+
+
+def main():
+
+    parser = argparse.ArgumentParser(description=''' 
+    Generate tiles for training from an image and label set,
+    or generate tiles for production from an image.
+    The image must first have been standardized for use in ramp processing: 
+    it should be a 3-channel unsigned integer RGB geotiff with 0 as its nodata value. 
+
+    Example: tile_datasets.py -img large_AOI_image.tif -vecs large_AOI_vectors.geojson -out output_dir
+        -pfx large_AOI -trec directory_of_tiles.geojson -ndt 0.4 -oht 256 -owd 256
+
+        will produce image chips in the directory output_dir/chips, and labels in the directory output_dir/labels.
+        These will have names of the form large_AOI_*.tif and large_AOI*.geojson.
+        directory_of_chips.geojson is a record of the names and locations of created chips.
+        Image chips containing more than 40% invalid data will be skipped and not created.
+    ''', 
+    formatter_class=argparse.RawTextHelpFormatter)
+
+    # required
+    parser.add_argument('-img', '--image_file', type=str, nargs='+', required=True, help=r'Path to input image(s).')
+    parser.add_argument('-vecs', '--vectors_file', type=str, required=False, default=None, help='Path to input labels (optional)')
+    parser.add_argument('-out', '--output_dir', type=str, required=True, help="Path to output directory")
+    parser.add_argument('-pfx', '--prefix', type=str, required=True, help="prefix for chip and label filenames")
+
+    # optional/has default
+    parser.add_argument('-trec', '--tile_record_filename', type=str, required=False, default=None, help="geojson database of chips created")
+    parser.add_argument('-ndt', '--nodata_threshold', type=float, required=False, default=0.4, help="threshold for discarding images with a higher percentage of nodata values")
+    parser.add_argument('-oht', '--output_tile_height', type=int, required=False, default=256, help="height in pixels of output tiles")
+    parser.add_argument('-owd', '--output_tile_width', type=int, required=False, default=256, help="width in pixels of output tiles")
+    args = parser.parse_args()
+
+    file_prefix = args.prefix
+    nodata_thresh = args.nodata_threshold
+    tile_record_filename = args.tile_record_filename
+    create_tile_record = False if tile_record_filename is None else True
+
+    dst_shape=(args.output_tile_height, args.output_tile_width)
+
+    img_files = args.image_file if isinstance(args.image_file, list) else [args.image_file]
+
+    log.info(f"Starting parallel tiling for {len(img_files)} image(s)...")
+
+    # === parallel execution ===
+    MAX_WORKERS = 8
+    log.info(f"Starting ProcessPoolExecutor with {MAX_WORKERS} workers.")
+    with ProcessPoolExecutor(max_workers=MAX_WORKERS) as executor:
+        futures = {executor.submit(
+            tile_single_image,
+            img,
+            args.vectors_file,
+            args.output_dir,
+            file_prefix,
+            nodata_thresh,
+            dst_shape,
+            tile_record_filename
+        ): img for img in img_files}  # Map future -> img_file
+
+        total_tasks = len(futures)
+        log.info(f"Submitted {total_tasks} tasks to the pool.")
+
+        # Track progress
+        completed_tasks = 0
+        for future in as_completed(futures):
+            img_file = futures[future]
+            try:
+                future.result()  # will raise exception if task failed
+                completed_tasks += 1
+
+                # log progress and system stats
+                log.info(
+                    f"COMPLETED: {completed_tasks}/{total_tasks} for {img_file} | "
+                    f"Sys CPU: {psutil.cpu_percent()}% | "
+                    f"Sys Mem: {psutil.virtual_memory().percent}%"
+                )
+
+            except Exception as e:
+                log.error(f"FAILED: Task for {img_file} raised an exception: {e}")
+
+    log.info("All tiling completed successfully.")
+
+if __name__=="__main__":
+    main()

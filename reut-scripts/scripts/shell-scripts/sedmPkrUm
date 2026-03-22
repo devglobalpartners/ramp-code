@@ -1,0 +1,99 @@
+#!/usr/bin/env bash
+#
+# Usage: ./batch_run_predictions_on_geotiffs.sh \
+#          -i INPUT_FOLDER_PATH \
+#          -o OUTPUT_FOLDER_PATH \
+#          -m MODEL_PATH \
+#          [-a MIN_AREA]
+#
+
+set -euo pipefail   # exit on error, unset vars, pipe failures
+
+# ── Parse arguments ──────────────────────────────────────────────────────────
+while getopts i:o:m:a: flag; do
+    case "${flag}" in
+        i) input=${OPTARG} ;;
+        o) output=${OPTARG} ;;
+        m) model=$(realpath "$OPTARG") ;;
+        a) min=${OPTARG} ;;
+        *) echo "Unknown flag: ${flag}"; exit 1 ;;
+    esac
+done
+
+# Validate required args
+: "${input:?  -i INPUT_FOLDER_PATH is required}"
+: "${output:? -o OUTPUT_FOLDER_PATH is required}"
+: "${model:?  -m MODEL_PATH is required}"
+
+echo "Input  : $input"
+echo "Output : $output"
+echo "Model  : $model"
+echo "Min    : ${min:-not set}"
+
+mkdir -p "$output"/chips "$output"/pred_masks "$output"/geojson
+# ── Step 1: Tile all GeoTIFFs (4 at a time in parallel) ──────────────────────
+echo ""
+echo "==> Tiling GeoTIFFs..."
+
+shopt -s globstar
+counter=0
+
+for file in "$input"/**/*.tif; do
+    [[ -f "$file" ]] || continue   # skip if glob finds nothing
+
+    (( ++counter ))
+    echo "  Tiling [$counter]: $file"
+
+    python ./reut-scripts/scripts/python/tile_dataset_1.py \
+        -img "$file" \
+        -out "$output" \
+        -pfx tmp_chip \
+        -ndt 0.4 \
+        -oht 256 \
+        -owd 256 &
+
+    if (( counter >= 16 )); then
+        echo "  Waiting for current batch of 4 to finish..."
+        wait
+        counter=0
+    fi
+done
+wait
+
+echo "==> Tiling complete."
+
+# ── Step 2: Run model predictions ────────────────────────────────────────────
+echo ""
+echo "==> Running building footprint predictions..."
+
+python ./reut-scripts/scripts/python/get_model_predictions.py \
+    -mod "$model" \
+    -idir "$output"/chips \
+    -odir "$output"/pred_masks
+
+# ── Step 3: Convert masks to GeoJSON ─────────────────────────────────────────
+echo ""
+echo "==> Converting masks to GeoJSON..."
+
+python ./reut-scripts/scripts/python/get_labels_from_masks.py \
+    -in  "$output"/pred_masks \
+    -out "$output"/geojson/predicted_buildings.geojson \
+    -bwpix 2 \
+    -crs EPSG:4326
+# ── Step 4: (Optional) Remove slivers ────────────────────────────────────────
+# if [[ -n "${min:-}" ]]; then
+#     echo "==> Removing slivers (min area: $min)..."
+#     python ramp-code/scripts/remove_slivers.py \
+#         -ldir "$output"/geojson/ \
+#         -fdir "$output"/filter_predicted_buildings \
+#         -min  "$min"
+# fi
+
+# ── Step 5: Cleanup temp files ────────────────────────────────────────────────
+echo ""
+echo "==> Cleaning up temporary files..."
+rm -rf "$output"/chips
+rm -rf "$output"/pred_masks
+
+echo ""
+echo "Done! GeoJSON output: $output/geojson/predicted_buildings.geojson"
